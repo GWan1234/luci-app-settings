@@ -1,0 +1,56 @@
+name: build
+
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: '发布 Release(标签取 Makefile 的 PKG_VERSION)'
+        type: boolean
+        default: false
+      sdk_version:
+        description: 'OpenWrt SDK 版本'
+        type: string
+        default: '25.12.5'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+            build-essential cmake pkg-config gettext file gawk unzip rsync zstd python3
+
+      - name: Cache SDK tarball
+        uses: actions/cache@v4
+        with:
+          path: ~/openwrt-sdk-work/${{ inputs.sdk_version }}/sdk.tar.zst
+          key: openwrt-sdk-${{ inputs.sdk_version }}-x86-64
+
+      - name: Build package
+        run: SDK_VER='${{ inputs.sdk_version }}' bash build.sh
+
+      - name: Read package version
+        id: ver
+        run: echo "version=$(sed -n 's/^PKG_VERSION:=//p' Makefile)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: luci-app-settings-${{ steps.ver.outputs.version }}
+          path: dist/*.apk
+          if-no-files-found: error
+
+      - name: Release
+        if: ${{ inputs.release }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.ver.outputs.version }}
+          name: luci-app-settings v${{ steps.ver.outputs.version }}
+          files: dist/*.apk

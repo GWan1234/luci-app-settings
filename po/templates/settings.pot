@@ -1,0 +1,119 @@
+msgid ""
+msgstr "Content-Type: text/plain; charset=UTF-8"
+
+msgid "%s — %d bytes, last modified: %s"
+msgstr ""
+
+msgid "%s — file does not exist yet, it will be created when saving."
+msgstr ""
+
+msgid "Absolute path under /etc/, e.g. /etc/sysctl.conf."
+msgstr ""
+
+msgid "Add"
+msgstr ""
+
+msgid "Add custom file"
+msgstr ""
+
+msgid "Add custom file…"
+msgstr ""
+
+msgid "Apply action: restart service \"%s\"."
+msgstr ""
+
+msgid "Apply action: run reload_config (this only reloads services for files under /etc/config)."
+msgstr ""
+
+msgid "Cancel"
+msgstr ""
+
+msgid "Changed configuration files were applied via reload_config."
+msgstr ""
+
+msgid "Command failed with exit code %d: %s"
+msgstr ""
+
+msgid "Configuration Files"
+msgstr ""
+
+msgid "Contents of %s have been reloaded from disk."
+msgstr ""
+
+msgid "Contents of %s have been saved and applied."
+msgstr ""
+
+msgid "Contents of %s have been saved."
+msgstr ""
+
+msgid "DHCP / DNS"
+msgstr ""
+
+msgid "Detected init.d script with the same name: \"%s\"."
+msgstr ""
+
+msgid "Directly edit the raw contents of common UCI configuration files under /etc/config and apply the changes. Custom files can be added to the list with the button below."
+msgstr ""
+
+msgid "Failed to update the custom file list: %s"
+msgstr ""
+
+msgid "File path"
+msgstr ""
+
+msgid "File was saved, but applying the changes failed: %s"
+msgstr ""
+
+msgid "Firewall"
+msgstr ""
+
+msgid "Init script to restart on apply (optional)"
+msgstr ""
+
+msgid "Invalid file path."
+msgstr ""
+
+msgid "Invalid service name."
+msgstr ""
+
+msgid "JSON syntax check failed: %s"
+msgstr ""
+
+msgid "Matched"
+msgstr ""
+
+msgid "Network"
+msgstr ""
+
+msgid "Please enter an absolute file path below /etc/."
+msgstr ""
+
+msgid "Remove from list"
+msgstr ""
+
+msgid "Reset"
+msgstr ""
+
+msgid "Save"
+msgstr ""
+
+msgid "Save & Apply"
+msgstr ""
+
+msgid "Service \"%s\" has been restarted."
+msgstr ""
+
+msgid "System"
+msgstr ""
+
+msgid "This file is already in the list."
+msgstr ""
+
+msgid "UCI syntax check failed: %s"
+msgstr ""
+
+msgid "Unable to save %s: %s"
+msgstr ""
+
+msgid "init.d service name; leave empty to run reload_config."
+msgstr ""
