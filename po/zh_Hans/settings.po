@@ -85,6 +85,9 @@ msgstr "无效的服务名称。"
 msgid "JSON syntax check failed: %s"
 msgstr "JSON 语法检查失败:%s"
 
+msgid "JSON syntax error"
+msgstr "JSON 语法错误"
+
 msgid "Matched"
 msgstr "已匹配"
 
@@ -106,11 +109,23 @@ msgstr "保存"
 msgid "Save & Apply"
 msgstr "保存并应用"
 
+msgid "Save anyway"
+msgstr "仍要保存"
+
+msgid "Save cancelled: %s was not modified and no apply action was performed."
+msgstr "已取消保存:%s 未被修改,应用动作也未执行。"
+
 msgid "Service \"%s\" has been restarted."
 msgstr "服务“%s”已重启。"
 
 msgid "System"
 msgstr "系统"
+
+msgid "The content is not valid strict JSON. If the target program accepts comments or other relaxed JSON syntax, you can still save the file as-is."
+msgstr "文件内容不是严格合法的 JSON。如果目标程序支持注释等宽松 JSON 语法,仍可按原样保存。"
+
+msgid "The file on disk was not modified and no apply action was performed."
+msgstr "磁盘上的文件未被修改,应用动作也未执行。"
 
 msgid "This file is already in the list."
 msgstr "该文件已在列表中。"

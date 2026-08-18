@@ -301,6 +301,31 @@ return view.extend({
 		});
 	},
 
+	confirmSaveAnyway: function(err) {
+		return new Promise(function(resolveFn) {
+			var done = function(ok) {
+				ui.hideModal();
+				resolveFn(ok);
+			};
+
+			ui.showModal(_('JSON syntax error'), [
+				E('p', {}, err.message),
+				E('p', {}, _('The content is not valid strict JSON. If the target program accepts comments or other relaxed JSON syntax, you can still save the file as-is.')),
+				E('div', { 'class': 'right' }, [
+					E('button', {
+						'class': 'btn',
+						'click': function() { done(false); }
+					}, [ _('Cancel') ]),
+					' ',
+					E('button', {
+						'class': 'cbi-button cbi-button-negative important',
+						'click': function() { done(true); }
+					}, [ _('Save anyway') ])
+				])
+			]);
+		});
+	},
+
 	applyEntry: function(entry) {
 		var cmd, args, what;
 
@@ -338,7 +363,18 @@ return view.extend({
 		if (value.length > 0 && value.charAt(value.length - 1) != '\n')
 			value += '\n';
 
-		return self.validateJsonSyntax(entry, value).then(function() {
+		return self.validateJsonSyntax(entry, value).catch(function(err) {
+			if (err.line != null)
+				self.markErrorLine(entry, err.line, err.message);
+
+			return self.confirmSaveAnyway(err).then(function(confirmed) {
+				if (!confirmed) {
+					var abort = new Error(err.message);
+					abort.cancelled = true;
+					throw abort;
+				}
+			});
+		}).then(function() {
 			return self.validateUciSyntax(entry.path, value);
 		}).then(function() {
 			return fs.write(entry.path, value, 420 /* 0644 */);
@@ -360,11 +396,20 @@ return view.extend({
 
 			return self.applyEntry(entry);
 		}).catch(function(err) {
+			if (err.cancelled) {
+				ui.addNotification(null, E('p',
+					_('Save cancelled: %s was not modified and no apply action was performed.').format(entry.path)), 'info');
+				return;
+			}
+
 			if (err.line != null)
 				self.markErrorLine(entry, err.line, err.message);
 
-			ui.addNotification(null, E('p',
-				_('Unable to save %s: %s').format(entry.path, err.message)));
+			ui.addNotification(null, E('p', [
+				_('Unable to save %s: %s').format(entry.path, err.message),
+				' ',
+				_('The file on disk was not modified and no apply action was performed.')
+			]));
 		});
 	},
 

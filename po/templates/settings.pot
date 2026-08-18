@@ -79,6 +79,9 @@ msgstr ""
 msgid "JSON syntax check failed: %s"
 msgstr ""
 
+msgid "JSON syntax error"
+msgstr ""
+
 msgid "Matched"
 msgstr ""
 
@@ -100,10 +103,22 @@ msgstr ""
 msgid "Save & Apply"
 msgstr ""
 
+msgid "Save anyway"
+msgstr ""
+
+msgid "Save cancelled: %s was not modified and no apply action was performed."
+msgstr ""
+
 msgid "Service \"%s\" has been restarted."
 msgstr ""
 
 msgid "System"
+msgstr ""
+
+msgid "The content is not valid strict JSON. If the target program accepts comments or other relaxed JSON syntax, you can still save the file as-is."
+msgstr ""
+
+msgid "The file on disk was not modified and no apply action was performed."
 msgstr ""
 
 msgid "This file is already in the list."
