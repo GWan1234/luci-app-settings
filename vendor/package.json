@@ -7,14 +7,14 @@
 	},
 	"dependencies": {
 		"@codemirror/commands": "^6",
-		"@codemirror/lang-json": "^6",
 		"@codemirror/language": "^6",
 		"@codemirror/legacy-modes": "^6",
 		"@codemirror/lint": "^6",
 		"@codemirror/search": "^6",
 		"@codemirror/state": "^6",
 		"@codemirror/theme-one-dark": "^6",
-		"@codemirror/view": "^6"
+		"@codemirror/view": "^6",
+		"jsonc-parser": "^3"
 	},
 	"devDependencies": {
 		"esbuild": ">=0.20"

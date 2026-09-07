@@ -13,7 +13,10 @@ import {
 } from '@codemirror/language';
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
 import { linter, lintGutter, lintKeymap, setDiagnostics } from '@codemirror/lint';
-import { json, jsonParseLinter } from '@codemirror/lang-json';
+/* JSON is handled as JSONC (comments + trailing commas): the legacy stream mode
+ * highlights comments, jsonc-parser (the parser VS Code uses) validates. */
+import { json as jsonMode } from '@codemirror/legacy-modes/mode/javascript';
+import { parse as jsoncParse, printParseErrorCode } from 'jsonc-parser';
 import { shell } from '@codemirror/legacy-modes/mode/shell';
 import { oneDark } from '@codemirror/theme-one-dark';
 
@@ -26,7 +29,7 @@ window.__CM6 = {
 	indentOnInput,
 	searchKeymap, highlightSelectionMatches,
 	linter, lintGutter, lintKeymap, setDiagnostics,
-	json, jsonParseLinter,
+	jsonMode, jsoncParse, printParseErrorCode,
 	shell,
 	oneDark
 };

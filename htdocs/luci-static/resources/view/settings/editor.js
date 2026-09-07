@@ -55,6 +55,143 @@ function detectInitScript(path) {
 	}, Promise.resolve(null));
 }
 
+/* --- JSONC (JSON with comments) validation --- */
+
+var JSONC_MESSAGES = null;
+
+function jsoncMessage(code) {
+	if (JSONC_MESSAGES == null)
+		JSONC_MESSAGES = {
+			InvalidSymbol:          _('Invalid symbol'),
+			InvalidNumberFormat:    _('Invalid number format'),
+			PropertyNameExpected:   _('Property name expected'),
+			ValueExpected:          _('Value expected'),
+			ColonExpected:          _('Colon (":") expected'),
+			CommaExpected:          _('Comma (",") expected'),
+			CloseBraceExpected:     _('Closing brace ("}") expected'),
+			CloseBracketExpected:   _('Closing bracket ("]") expected'),
+			EndOfFileExpected:      _('End of file expected'),
+			InvalidCommentToken:    _('Invalid comment token'),
+			UnexpectedEndOfComment: _('Unterminated comment'),
+			UnexpectedEndOfString:  _('Unterminated string'),
+			UnexpectedEndOfNumber:  _('Unterminated number'),
+			InvalidUnicode:         _('Invalid unicode escape'),
+			InvalidEscapeCharacter: _('Invalid escape character'),
+			InvalidCharacter:       _('Invalid character')
+		};
+
+	return JSONC_MESSAGES[code] || code;
+}
+
+function offsetToLineCol(text, offset) {
+	var head = text.slice(0, offset).split('\n');
+
+	return { line: head.length, col: head[head.length - 1].length + 1 };
+}
+
+/* Degraded check used when the CodeMirror bundle failed to load. */
+function strictJsonCheck(text) {
+	var res = { errors: [], relaxed: false };
+
+	try {
+		JSON.parse(text);
+	}
+	catch (e) {
+		var m = e.message.match(/at position (\d+)/);
+		var offset = m ? Math.min(+m[1], text.length) : 0;
+		var pos = offsetToLineCol(text, offset);
+
+		res.errors.push({
+			from: offset,
+			to: offset,
+			line: pos.line,
+			col: pos.col,
+			message: e.message
+		});
+	}
+
+	return res;
+}
+
+/* Validate as JSONC: comments and trailing commas are accepted. Returns
+ * { errors: [ { from, to, line, col, message } ], relaxed: bool }, where
+ * "relaxed" flags a document that only parses because of that tolerance. */
+function jsoncCheck(text) {
+	var C = window.__CM6;
+	var res = { errors: [], relaxed: false };
+
+	if (text.trim() == '')
+		return res;
+
+	if (C == null || C.jsoncParse == null)
+		return strictJsonCheck(text);
+
+	var raw = [];
+
+	C.jsoncParse(text, raw, { allowTrailingComma: true, disallowComments: false });
+
+	res.errors = raw.map(function(e) {
+		var pos = offsetToLineCol(text, e.offset);
+
+		return {
+			from: e.offset,
+			to: e.offset + e.length,
+			line: pos.line,
+			col: pos.col,
+			message: jsoncMessage(C.printParseErrorCode(e.error))
+		};
+	});
+
+	/* Only worth reporting when the document is otherwise clean, and only as a
+	 * single hint - one marker per comment would drown a commented config. */
+	if (res.errors.length == 0) {
+		var strict = [];
+
+		C.jsoncParse(text, strict, { allowTrailingComma: false, disallowComments: true });
+		res.relaxed = (strict.length > 0);
+	}
+
+	return res;
+}
+
+/* Legacy selection based copy - the only option on plain HTTP, where the async
+ * clipboard API is not exposed. */
+function copyTextLegacy(text) {
+	var ta = E('textarea', { 'style': 'position:fixed; top:-1000px; opacity:0' });
+	var ok = false;
+
+	ta.value = text;
+	document.body.appendChild(ta);
+	ta.focus();
+	ta.select();
+
+	try { ok = document.execCommand('copy'); }
+	catch (e) { ok = false; }
+
+	document.body.removeChild(ta);
+
+	return ok;
+}
+
+function copyText(text) {
+	var fallback = function() {
+		return copyTextLegacy(text) ? Promise.resolve()
+			: Promise.reject(new Error(_('Copying failed. The messages above can be selected and copied by hand.')));
+	};
+
+	if (navigator.clipboard == null || !window.isSecureContext)
+		return fallback();
+
+	/* writeText() can stay pending forever when the document lost focus, so
+	 * never let the caller wait on it without an answer. */
+	return Promise.race([
+		navigator.clipboard.writeText(text),
+		new Promise(function(resolveFn, rejectFn) {
+			window.setTimeout(function() { rejectFn(new Error('timeout')); }, 2000);
+		})
+	]).catch(fallback);
+}
+
 /* --- CodeMirror 6 integration (bundled as settings/cm6.js, textarea fallback) --- */
 
 function loadCM6() {
@@ -64,20 +201,137 @@ function loadCM6() {
 	return new Promise(function(resolveFn) {
 		var s = document.createElement('script');
 
-		s.src = L.resource('settings/cm6.js') + '?v=1';
+		s.src = L.resource('settings/cm6.js') + '?v=2';
 		s.onload = function() { resolveFn(window.__CM6 != null); };
 		s.onerror = function() { resolveFn(false); };
 		document.head.appendChild(s);
 	});
 }
 
-var uciLang = null, shellLang = null;
+/* Move the cursor to a document offset and reveal it. */
+function jumpToOffset(entry, offset) {
+	if (!entry.cmView)
+		return;
 
-function languageExtensions(path) {
+	var view = entry.cmView;
+	var at = Math.max(0, Math.min(offset, view.state.doc.length));
+
+	view.dispatch({ selection: { anchor: at }, scrollIntoView: true });
+	view.focus();
+}
+
+/* Render the always visible diagnostics list below an editor. The CodeMirror
+ * lint tooltip only survives while the pointer rests on the gutter marker,
+ * which makes the message impossible to select or copy - this panel keeps the
+ * same messages as plain, selectable text. */
+function renderDiagnostics(entry, check) {
+	var node = entry.diagnode;
+
+	if (node == null)
+		return;
+
+	while (node.firstChild)
+		node.removeChild(node.firstChild);
+
+	var errors = (check != null) ? check.errors : [];
+
+	if (errors.length == 0) {
+		if (check == null || !check.relaxed) {
+			node.style.display = 'none';
+			return;
+		}
+
+		node.style.display = '';
+		node.appendChild(E('div', { 'class': 'cbi-section-descr' },
+			_('This file uses relaxed JSON syntax (comments and/or trailing commas), which is accepted here. Make sure the target program understands it as well.')));
+
+		return;
+	}
+
+	var lines = errors.map(function(e) {
+		return _('line %d, column %d: %s').format(e.line, e.col, e.message);
+	});
+
+	node.style.display = '';
+	node.appendChild(E('div', { 'style': 'margin-bottom:.25em' }, [
+		E('strong', {}, [ _('JSON syntax errors (%d)').format(errors.length) ]),
+		' ',
+		E('button', {
+			'class': 'cbi-button cbi-button-neutral',
+			'style': 'padding:0 .5em',
+			'click': function(ev) {
+				var btn = ev.currentTarget;
+
+				copyText(lines.join('\n') + '\n').then(function() {
+					ui.addNotification(null, E('p', _('Error messages copied to the clipboard.')), 'info');
+				}).catch(function(err) {
+					ui.addNotification(null, E('p', err.message));
+				});
+
+				btn.blur();
+			}
+		}, [ _('Copy') ])
+	]));
+
+	node.appendChild(E('ul', {
+		'style': 'margin:0; padding-left:1.5em; user-select:text; -webkit-user-select:text'
+	}, errors.map(function(e, i) {
+		var row = [ document.createTextNode(lines[i]) ];
+
+		if (entry.cmView) {
+			row.push(' ');
+			row.push(E('a', {
+				'href': '#',
+				'click': function(ev) {
+					ev.preventDefault();
+					jumpToOffset(entry, e.from);
+				}
+			}, [ _('jump to') ]));
+		}
+
+		return E('li', { 'style': 'margin:.15em 0' }, row);
+	})));
+}
+
+/* Lint source for .json files: tolerates comments and trailing commas, and
+ * mirrors every diagnostic into the panel rendered by renderDiagnostics(). */
+function jsoncLintSource(entry) {
+	return function(view) {
+		var text = view.state.doc.toString();
+		var max = view.state.doc.length;
+		var check = jsoncCheck(text);
+
+		renderDiagnostics(entry, check);
+
+		return check.errors.map(function(e) {
+			var from = Math.min(e.from, max);
+
+			return {
+				from: from,
+				to: Math.min(Math.max(e.to, from + 1), max),
+				severity: 'error',
+				message: e.message
+			};
+		});
+	};
+}
+
+var uciLang = null, jsonLang = null, shellLang = null;
+
+function languageExtensions(entry) {
 	var C = window.__CM6;
+	var path = entry.path;
 
-	if (/\.json$/.test(path))
-		return [ C.json(), C.lintGutter(), C.linter(C.jsonParseLinter()) ];
+	if (/\.json$/.test(path)) {
+		if (jsonLang == null)
+			jsonLang = C.StreamLanguage.define(C.jsonMode);
+
+		return [
+			jsonLang,
+			C.lintGutter(),
+			C.linter(jsoncLintSource(entry), { delay: 400 })
+		];
+	}
 
 	if (/^\/etc\/config\//.test(path)) {
 		if (uciLang == null)
@@ -149,7 +403,7 @@ function createEditor(entry) {
 			'&': { 'height': '34em', 'border': '1px solid #999', 'font-size': '13px' },
 			'.cm-scroller': { 'font-family': 'SFMono-Regular, Consolas, Menlo, monospace', 'overflow': 'auto' }
 		})
-	].concat(languageExtensions(entry.path));
+	].concat(languageExtensions(entry));
 
 	if (dark)
 		exts.push(C.oneDark);
@@ -233,6 +487,8 @@ return view.extend({
 	},
 
 	clearDiagnostics: function(entry) {
+		renderDiagnostics(entry, null);
+
 		if (entry.cmView)
 			entry.cmView.dispatch(window.__CM6.setDiagnostics(entry.cmView.state, []));
 	},
@@ -257,22 +513,21 @@ return view.extend({
 		if (!/\.json$/.test(entry.path) || value.trim() == '')
 			return Promise.resolve(null);
 
-		try {
-			JSON.parse(value);
+		var check = jsoncCheck(value);
+
+		renderDiagnostics(entry, check);
+
+		if (check.errors.length == 0)
 			return Promise.resolve(null);
-		}
-		catch (e) {
-			var err = new Error(_('JSON syntax check failed: %s').format(e.message));
 
-			if (entry.cmView) {
-				var diags = window.__CM6.jsonParseLinter()(entry.cmView);
+		var first = check.errors[0];
+		var err = new Error(_('JSON syntax check failed at line %d, column %d: %s')
+			.format(first.line, first.col, first.message));
 
-				if (diags.length > 0)
-					err.line = entry.cmView.state.doc.lineAt(diags[0].from).number;
-			}
+		err.line = first.line;
+		err.offset = first.from;
 
-			return Promise.reject(err);
-		}
+		return Promise.reject(err);
 	},
 
 	validateUciSyntax: function(path, value) {
@@ -310,7 +565,7 @@ return view.extend({
 
 			ui.showModal(_('JSON syntax error'), [
 				E('p', {}, err.message),
-				E('p', {}, _('The content is not valid strict JSON. If the target program accepts comments or other relaxed JSON syntax, you can still save the file as-is.')),
+				E('p', {}, _('Comments and trailing commas are already accepted, so this is a genuine syntax error. You can still save the file as-is if the target program tolerates it.')),
 				E('div', { 'class': 'right' }, [
 					E('button', {
 						'class': 'btn',
@@ -364,7 +619,9 @@ return view.extend({
 			value += '\n';
 
 		return self.validateJsonSyntax(entry, value).catch(function(err) {
-			if (err.line != null)
+			if (err.offset != null)
+				jumpToOffset(entry, err.offset);
+			else if (err.line != null)
 				self.markErrorLine(entry, err.line, err.message);
 
 			return self.confirmSaveAnyway(err).then(function(confirmed) {
@@ -593,6 +850,8 @@ return view.extend({
 		entry.statnode = E('div', { 'class': 'cbi-section-descr' });
 		entry.statnode.textContent = self.statLine(entry);
 
+		entry.diagnode = E('div', { 'style': 'display:none; margin:.5em 0' });
+
 		var children = [ entry.statnode ];
 
 		if (window.__CM6 != null) {
@@ -609,6 +868,8 @@ return view.extend({
 			entry.textarea.value = entry.content;
 			children.push(entry.textarea);
 		}
+
+		children.push(entry.diagnode);
 
 		if (entry.custom) {
 			var applyText;
